@@ -232,7 +232,7 @@ async function main() {
         const message = {
           type: msg.type(),
           text: messageText,
-          args: args,
+          args,
           timestamp: new Date().toISOString()
         };
 
