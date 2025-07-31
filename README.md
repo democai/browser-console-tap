@@ -11,6 +11,21 @@ A powerful CLI tool to capture browser console logs from any URL using headless 
 - 🧪 **Tested**: Comprehensive test suite included
 - 📦 **Easy Installation**: Simple npm package
 
+## Use Cases
+
+### AI Agent Pipelines
+
+This tool is particularly valuable in AI Agent pipelines where automated testing and validation of web applications is required. AI agents can use this script to:
+
+- **Test Site Functionality**: Verify that a deployed website is working correctly and all dependencies are functioning
+- **Monitor Console Errors**: Capture JavaScript errors, warnings, and logs to identify issues in production
+- **Validate Dependencies**: Ensure that all external libraries, APIs, and resources are loading properly
+- **Automated Health Checks**: Run scheduled checks to monitor site health and alert on issues
+- **CI/CD Integration**: Integrate into deployment pipelines to verify successful deployments
+- **Debug Remote Issues**: Troubleshoot problems on sites that are difficult to access or reproduce locally
+
+The script's headless browser automation makes it perfect for server environments where GUI browsers aren't available, and its structured output format allows AI agents to parse and analyze results programmatically.
+
 ## Installation
 
 ### Prerequisites
@@ -18,7 +33,46 @@ A powerful CLI tool to capture browser console logs from any URL using headless 
 - Node.js 18.0.0 or higher
 - npm or yarn
 
-### Install Dependencies
+### Install Playwright Browsers
+
+Before using the tool, you need to install the Playwright browsers:
+
+```bash
+npx playwright install chromium
+```
+
+### Global Installation
+
+To install the tool globally and use it from anywhere on your system:
+
+#### Option 1: Install from Local Directory
+
+```bash
+# Clone the repository first
+git clone <repository-url>
+cd browser-console-tap
+
+# Install globally from the local directory
+npm install -g .
+```
+
+#### Option 2: Install from Git Repository
+
+```bash
+npm install -g <repository-url>
+```
+
+After global installation, you can run the tool from any directory:
+
+```bash
+browser-console-tap https://example.com
+```
+
+**Note**: This package is not yet published to npm. Use one of the installation methods above until it's available on the npm registry.
+
+### Local Development Installation
+
+#### Install Dependencies
 
 ```bash
 npm install

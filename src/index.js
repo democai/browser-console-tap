@@ -79,19 +79,34 @@ async function main() {
     const consoleMessages = [];
     page.on('console', async (msg) => {
       try {
-        const args = await Promise.all(
-          msg.args().map(async (arg) => {
-            try {
-              return await arg.jsonValue();
-            } catch {
-              return arg.toString();
-            }
-          })
-        );
+        // Get the console message text directly
+        const messageText = msg.text();
+        
+        // Try to get additional arguments
+        let args = [];
+        try {
+          args = await Promise.all(
+            msg.args().map(async (arg) => {
+              try {
+                return await arg.jsonValue();
+              } catch {
+                // If JSON parsing fails, try to get the string representation
+                try {
+                  return await arg.textContent();
+                } catch {
+                  return arg.toString();
+                }
+              }
+            })
+          );
+        } catch (argError) {
+          // If we can't get args, just use the message text
+          args = [messageText];
+        }
 
         const message = {
           type: msg.type(),
-          text: msg.text(),
+          text: messageText,
           args: args,
           timestamp: new Date().toISOString()
         };
@@ -102,14 +117,21 @@ async function main() {
         const typeColor = msg.type() === 'error' ? 'red' : 
                          msg.type() === 'warning' ? 'yellow' : 'green';
         
-        const formattedArgs = args.map(arg => {
-          if (typeof arg === 'object') {
-            return JSON.stringify(arg);
-          }
-          return String(arg);
-        }).join(' ');
+        // Use the message text as the primary output
+        let outputText = messageText;
+        
+        // If we have additional args and they're different from the text, append them
+        if (args.length > 0 && args[0] !== messageText) {
+          const formattedArgs = args.map(arg => {
+            if (typeof arg === 'object') {
+              return JSON.stringify(arg);
+            }
+            return String(arg);
+          }).join(' ');
+          outputText = `${messageText} ${formattedArgs}`;
+        }
 
-        console.log(chalk[typeColor](`[console.${msg.type()}] ${formattedArgs}`));
+        console.log(chalk[typeColor](`[console.${msg.type()}] ${outputText}`));
       } catch (error) {
         console.error(chalk.red(`[console.error] Failed to process console message: ${error.message}`));
       }
