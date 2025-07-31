@@ -16,6 +16,7 @@ program
   .option('-v, --verbose', 'Enable verbose logging')
   .option('--no-headless', 'Run browser in non-headless mode (for debugging)')
   .option('--user-agent <agent>', 'Custom user agent string')
+  .option('--headers <headers>', 'Custom HTTP headers in JSON format (e.g., \'{"Authorization": "Bearer token", "X-Custom": "value"}\')')
   .parse();
 
 const options = program.opts();
@@ -49,6 +50,21 @@ if (isNaN(timeoutMs) || timeoutMs < 1000) {
   process.exit(1);
 }
 
+// Parse headers if provided
+let customHeaders = {};
+if (options.headers) {
+  try {
+    customHeaders = JSON.parse(options.headers);
+    if (typeof customHeaders !== 'object' || customHeaders === null) {
+      throw new Error('Headers must be a valid JSON object');
+    }
+  } catch (error) {
+    console.error(chalk.red(`Error: Invalid headers format "${options.headers}". Must be valid JSON.`));
+    console.error(chalk.gray('Example: --headers \'{"Authorization": "Bearer token", "X-Custom": "value"}\''));
+    process.exit(1);
+  }
+}
+
 async function main() {
   let browser;
   
@@ -58,6 +74,9 @@ async function main() {
     console.log(chalk.gray(`Delay: ${delayMs}ms`));
     console.log(chalk.gray(`Timeout: ${timeoutMs}ms`));
     console.log(chalk.gray(`Headless: ${options.headless ? 'Yes' : 'No'}`));
+    if (Object.keys(customHeaders).length > 0) {
+      console.log(chalk.gray(`Headers: ${JSON.stringify(customHeaders)}`));
+    }
     console.log('');
 
     // Launch browser
@@ -68,9 +87,15 @@ async function main() {
     const context = await browser.newContext();
     const page = await context.newPage();
 
+    // Set custom headers if provided
+    if (Object.keys(customHeaders).length > 0) {
+      await page.setExtraHTTPHeaders(customHeaders);
+    }
+
     // Set custom user agent if provided
     if (options.userAgent) {
       await page.setExtraHTTPHeaders({
+        ...customHeaders,
         'User-Agent': options.userAgent
       });
     }

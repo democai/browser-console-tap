@@ -7,7 +7,7 @@ A powerful CLI tool to capture browser console logs from any URL using headless 
 - 🚀 **Fast & Lightweight**: Uses Playwright for reliable browser automation
 - 🎨 **Beautiful Output**: Colored console output with emojis and formatting
 - ⚡ **Flexible Timing**: Customizable delay after page load
-- 🔧 **Advanced Options**: Custom user agents, timeouts, and verbose logging
+- 🔧 **Advanced Options**: Custom user agents, headers, timeouts, and verbose logging
 - 🧪 **Tested**: Comprehensive test suite included
 - 📦 **Easy Installation**: Simple npm package
 
@@ -23,6 +23,7 @@ This tool is particularly valuable in AI Agent pipelines where automated testing
 - **Automated Health Checks**: Run scheduled checks to monitor site health and alert on issues
 - **CI/CD Integration**: Integrate into deployment pipelines to verify successful deployments
 - **Debug Remote Issues**: Troubleshoot problems on sites that are difficult to access or reproduce locally
+- **Authenticated Testing**: Test protected endpoints and APIs with authentication headers
 
 The script's headless browser automation makes it perfect for server environments where GUI browsers aren't available, and its structured output format allows AI agents to parse and analyze results programmatically.
 
@@ -120,6 +121,12 @@ browser-console-tap --no-headless https://example.com
 # Custom user agent
 browser-console-tap --user-agent "MyBot/1.0" https://example.com
 
+# With authentication headers
+browser-console-tap --headers '{"Authorization": "Bearer your-token"}' https://api.example.com
+
+# With multiple custom headers
+browser-console-tap --headers '{"Authorization": "Bearer token", "X-API-Key": "your-key", "Content-Type": "application/json"}' https://example.com
+
 # Combine multiple options
 browser-console-tap --delay 4000 --verbose --timeout 30000 https://example.com
 ```
@@ -133,6 +140,7 @@ browser-console-tap --delay 4000 --verbose --timeout 30000 https://example.com
 | `--verbose` | `-v` | Enable verbose logging | `false` |
 | `--no-headless` | | Run browser in non-headless mode | `true` |
 | `--user-agent <agent>` | | Custom user agent string | Browser default |
+| `--headers <headers>` | | Custom HTTP headers in JSON format | None |
 
 ## Examples
 
@@ -152,6 +160,19 @@ browser-console-tap --delay 10000 --timeout 60000 https://myapp.com
 
 ```bash
 browser-console-tap --user-agent "TestBot/1.0" --delay 5000 https://example.com
+```
+
+### Testing with Authentication Headers
+
+```bash
+# Basic authentication
+browser-console-tap --headers '{"Authorization": "Bearer your-jwt-token"}' https://api.example.com
+
+# API with custom headers
+browser-console-tap --headers '{"X-API-Key": "your-api-key", "Accept": "application/json"}' https://api.example.com
+
+# Multiple authentication headers
+browser-console-tap --headers '{"Authorization": "Bearer token", "X-Client-ID": "client123", "X-Request-ID": "req456"}' https://secure-api.example.com
 ```
 
 ## Output Format
@@ -215,6 +236,8 @@ browser-console-tap/
 ```bash
 npm start          # Run the application
 npm test           # Run tests
+npm run demo       # Run basic demo
+npm run demo:auth  # Run authentication headers demo
 npm run lint       # Lint code
 npm run format     # Format code
 ```

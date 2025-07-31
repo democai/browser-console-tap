@@ -172,6 +172,25 @@ async function runTests() {
     
     console.log('✅ Test 7 passed\n');
     
+    // Test 8: Custom headers
+    console.log('📋 Test 8: Custom headers');
+    const result8 = await runCLI([testServer.url, '--delay', '1000', '--headers', '{"X-Test-Header": "test-value", "Authorization": "Bearer test-token"}']);
+    
+    expect(result8.code === 0, 'CLI should exit with code 0');
+    expect(result8.stdout.includes('Headers:'), 'Should show headers in output');
+    expect(result8.stdout.includes('X-Test-Header'), 'Should show custom headers');
+    
+    console.log('✅ Test 8 passed\n');
+    
+    // Test 9: Invalid headers format
+    console.log('📋 Test 9: Invalid headers format');
+    const result9 = await runCLI([testServer.url, '--headers', 'invalid-json']);
+    
+    expect(result9.code !== 0, 'CLI should exit with non-zero code for invalid headers');
+    expect(result9.stderr.includes('Invalid headers format'), 'Should show invalid headers error');
+    
+    console.log('✅ Test 9 passed\n');
+    
     console.log('🎉 All tests passed!');
     
   } catch (error) {
