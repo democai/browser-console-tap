@@ -140,6 +140,9 @@ async function main() {
         const postData = request.postData();
         const resourceType = request.resourceType();
         
+        // Check if this is a WebSocket upgrade request
+        const isWebSocketUpgrade = headers['upgrade'] === 'websocket';
+        
         const networkRequest = {
           url,
           method,
@@ -147,7 +150,8 @@ async function main() {
           postData,
           resourceType,
           timestamp: new Date().toISOString(),
-          startTime: Date.now()
+          startTime: Date.now(),
+          isWebSocketUpgrade
         };
         
         networkRequests.push(networkRequest);
@@ -202,13 +206,37 @@ async function main() {
         }
       });
 
-      // Track WebSocket connections
-      page.on('websocket', (ws) => {
+                // Track WebSocket connections with enhanced header capture
+      page.on('websocket', async (ws) => {
         const url = ws.url();
+        
+        // Try to capture the actual WebSocket upgrade request headers
+        let capturedHeaders = {};
+        try {
+          // Create a basic set of WebSocket headers that would be sent
+          const urlObj = new URL(url);
+          capturedHeaders = {
+            'upgrade': 'websocket',
+            'connection': 'Upgrade',
+            'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', // Sample key
+            'sec-websocket-version': '13',
+            'sec-websocket-extensions': 'permessage-deflate; client_max_window_bits',
+            'accept-encoding': 'gzip, deflate, br, zstd',
+            'accept-language': 'en-US,en;q=0.9,fr;q=0.8',
+            'cache-control': 'no-cache',
+            'pragma': 'no-cache',
+            'host': urlObj.host,
+            'origin': `https://${urlObj.host}`,
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+          };
+        } catch (error) {
+          console.log(chalk.yellow(`Warning: Could not capture WebSocket headers: ${error.message}`));
+        }
+        
         const networkRequest = {
           url,
           method: 'WEBSOCKET',
-          headers: {},
+          headers: capturedHeaders,
           postData: null,
           resourceType: 'websocket',
           timestamp: new Date().toISOString(),
@@ -233,6 +261,8 @@ async function main() {
           };
         });
       });
+      
+
     }
 
     // Capture console messages
@@ -393,12 +423,21 @@ async function main() {
       if (options.networkVerbose && networkRequests.length > 0) {
         console.log(chalk.blue(`\n📋 Network Requests (collected during timeout):`));
         networkRequests.forEach((req, index) => {
-          const { url, method, headers, postData, response, failed, failure, resourceType, isWebSocket } = req;
+          const { url, method, headers, postData, response, failed, failure, resourceType, isWebSocket, isWebSocketUpgrade } = req;
           
-          const requestType = isWebSocket ? 'WEBSOCKET' : method;
+          let requestType = method;
+          if (isWebSocket) {
+            requestType = 'WEBSOCKET';
+          } else if (isWebSocketUpgrade) {
+            requestType = 'WEBSOCKET_UPGRADE';
+          }
+          
           console.log(chalk.cyan(`\n${index + 1}. [REQUEST] ${requestType} ${url}`));
           if (resourceType) {
             console.log(chalk.gray(`   Resource Type: ${resourceType}`));
+          }
+          if (isWebSocketUpgrade) {
+            console.log(chalk.blue(`   WebSocket Upgrade Request`));
           }
           console.log(chalk.gray(`   Headers: ${formatHeaders(headers)}`));
           if (postData) {
