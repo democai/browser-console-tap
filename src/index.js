@@ -138,25 +138,19 @@ async function main() {
         const method = request.method();
         const headers = request.headers();
         const postData = request.postData();
+        const resourceType = request.resourceType();
         
         const networkRequest = {
           url,
           method,
           headers,
           postData,
+          resourceType,
           timestamp: new Date().toISOString(),
           startTime: Date.now()
         };
         
         networkRequests.push(networkRequest);
-        
-        if (options.networkVerbose) {
-          console.log(chalk.cyan(`🌐 [REQUEST] ${method} ${url}`));
-          console.log(chalk.gray(`   Headers: ${formatHeaders(headers)}`));
-          if (postData) {
-            console.log(chalk.gray(`   Post Data: ${truncateValue(postData)}`));
-          }
-        }
       });
 
       page.on('response', async (response) => {
@@ -177,26 +171,67 @@ async function main() {
             headers,
             duration
           };
-          
-          // Determine status color
-          let statusColor = 'green';
-          if (status >= 400) statusColor = 'red';
-          else if (status >= 300) statusColor = 'yellow';
-          
-          if (options.networkVerbose) {
-            console.log(chalk[statusColor](`📡 [RESPONSE] ${status} ${url} (${duration}ms)`));
-            console.log(chalk.gray(`   Response Headers: ${formatHeaders(headers)}`));
-          } else {
-            console.log(chalk[statusColor](`📡 [${status}] ${url} (${duration}ms)`));
-          }
         }
       });
 
       page.on('requestfailed', (request) => {
         const url = request.url();
         const failure = request.failure();
+        const resourceType = request.resourceType();
         
-        console.log(chalk.red(`❌ [FAILED] ${request.method()} ${url} - ${failure.errorText}`));
+        // Store failed request for later display
+        const networkRequest = networkRequests.find(req => req.url === url && req.method === request.method());
+        if (networkRequest) {
+          networkRequest.failed = true;
+          networkRequest.failure = failure.errorText;
+          networkRequest.resourceType = resourceType;
+        } else {
+          // If we can't find the request, create a new entry for the failed request
+          const failedRequest = {
+            url,
+            method: request.method(),
+            headers: request.headers(),
+            postData: request.postData(),
+            resourceType,
+            failed: true,
+            failure: failure.errorText,
+            timestamp: new Date().toISOString(),
+            startTime: Date.now()
+          };
+          networkRequests.push(failedRequest);
+        }
+      });
+
+      // Track WebSocket connections
+      page.on('websocket', (ws) => {
+        const url = ws.url();
+        const networkRequest = {
+          url,
+          method: 'WEBSOCKET',
+          headers: {},
+          postData: null,
+          resourceType: 'websocket',
+          timestamp: new Date().toISOString(),
+          startTime: Date.now(),
+          isWebSocket: true
+        };
+        
+        networkRequests.push(networkRequest);
+        
+        ws.on('socketerror', (error) => {
+          networkRequest.failed = true;
+          networkRequest.failure = `WebSocket error: ${error}`;
+        });
+        
+        ws.on('close', () => {
+          const endTime = Date.now();
+          const duration = endTime - networkRequest.startTime;
+          networkRequest.response = {
+            status: 'CLOSED',
+            headers: {},
+            duration
+          };
+        });
       });
     }
 
@@ -293,19 +328,109 @@ async function main() {
     
     if (options.network || options.networkVerbose) {
       const successfulRequests = networkRequests.filter(req => req.response);
-      const failedRequests = networkRequests.filter(req => !req.response);
+      const failedRequests = networkRequests.filter(req => req.failed);
+      const pendingRequests = networkRequests.filter(req => !req.response && !req.failed);
       
-      console.log(chalk.gray(`🌐 Network: ${successfulRequests.length} successful, ${failedRequests.length} failed requests`));
+      console.log(chalk.gray(`🌐 Network: ${successfulRequests.length} successful, ${failedRequests.length} failed, ${pendingRequests.length} pending requests`));
       
-      if (options.networkVerbose) {
+      // Highlight network issues
+      if (failedRequests.length > 0 || pendingRequests.length > 0) {
+        console.log(chalk.yellow(`⚠️  Network Issues Detected:`));
+        
+        if (failedRequests.length > 0) {
+          console.log(chalk.red(`   ${failedRequests.length} failed requests:`));
+          failedRequests.forEach((req, index) => {
+            console.log(chalk.red(`     ${index + 1}. ${req.method} ${req.url} - ${req.failure}`));
+          });
+        }
+        
+        if (pendingRequests.length > 0) {
+          console.log(chalk.yellow(`   ${pendingRequests.length} pending requests (no response received):`));
+          pendingRequests.forEach((req, index) => {
+            const duration = Date.now() - req.startTime;
+            console.log(chalk.yellow(`     ${index + 1}. ${req.method} ${req.url} - Pending for ${duration}ms`));
+          });
+        }
+        
+        // Network diagnostics
+        console.log(chalk.blue(`\n🔍 Network Diagnostics:`));
+        
+        // Check for common patterns
+        const pendingScripts = pendingRequests.filter(req => req.resourceType === 'script');
+        const pendingStylesheets = pendingRequests.filter(req => req.resourceType === 'stylesheet');
+        const pendingImages = pendingRequests.filter(req => req.resourceType === 'image');
+        
+        if (pendingScripts.length > 0) {
+          console.log(chalk.yellow(`   ⚠️  ${pendingScripts.length} JavaScript files pending - may cause page functionality issues`));
+        }
+        
+        if (pendingStylesheets.length > 0) {
+          console.log(chalk.yellow(`   ⚠️  ${pendingStylesheets.length} CSS files pending - may cause styling issues`));
+        }
+        
+        if (pendingImages.length > 0) {
+          console.log(chalk.yellow(`   ⚠️  ${pendingImages.length} images pending - may cause visual issues`));
+        }
+        
+        // Check for timeout patterns
+        const longPendingRequests = pendingRequests.filter(req => {
+          const duration = Date.now() - req.startTime;
+          return duration > 5000; // More than 5 seconds
+        });
+        
+        if (longPendingRequests.length > 0) {
+          console.log(chalk.red(`   🚨 ${longPendingRequests.length} requests pending for >5 seconds - possible network connectivity issues`));
+        }
+        
+        // Check for domain-specific issues
+        const domains = [...new Set(pendingRequests.map(req => new URL(req.url).hostname))];
+        if (domains.length > 1) {
+          console.log(chalk.yellow(`   📡 Pending requests span ${domains.length} different domains`));
+        }
+      }
+      
+      // Display network requests after timeout
+      if (options.networkVerbose && networkRequests.length > 0) {
+        console.log(chalk.blue(`\n📋 Network Requests (collected during timeout):`));
+        networkRequests.forEach((req, index) => {
+          const { url, method, headers, postData, response, failed, failure, resourceType, isWebSocket } = req;
+          
+          const requestType = isWebSocket ? 'WEBSOCKET' : method;
+          console.log(chalk.cyan(`\n${index + 1}. [REQUEST] ${requestType} ${url}`));
+          if (resourceType) {
+            console.log(chalk.gray(`   Resource Type: ${resourceType}`));
+          }
+          console.log(chalk.gray(`   Headers: ${formatHeaders(headers)}`));
+          if (postData) {
+            console.log(chalk.gray(`   Post Data: ${truncateValue(postData)}`));
+          }
+          
+          if (response) {
+            // Determine status color
+            let statusColor = 'green';
+            if (response.status >= 400 || response.status === 'CLOSED') statusColor = 'red';
+            else if (response.status >= 300) statusColor = 'yellow';
+            
+            console.log(chalk[statusColor](`   [RESPONSE] ${response.status} (${response.duration}ms)`));
+            console.log(chalk.gray(`   Response Headers: ${formatHeaders(response.headers)}`));
+          } else if (failed) {
+            console.log(chalk.red(`   [FAILED] ${failure}`));
+          } else {
+            console.log(chalk.yellow(`   [PENDING] No response received`));
+          }
+        });
+      } else if (options.network && networkRequests.length > 0) {
         console.log(chalk.blue(`\n📋 Network Summary:`));
         networkRequests.forEach((req, index) => {
-          const { url, method, response } = req;
+          const { url, method, response, failed, failure, resourceType, isWebSocket } = req;
+          const requestType = isWebSocket ? 'WEBSOCKET' : method;
           if (response) {
-            const statusColor = response.status >= 400 ? 'red' : response.status >= 300 ? 'yellow' : 'green';
-            console.log(chalk[statusColor](`  ${index + 1}. ${method} ${url} - ${response.status} (${response.duration}ms)`));
+            const statusColor = response.status >= 400 || response.status === 'CLOSED' ? 'red' : response.status >= 300 ? 'yellow' : 'green';
+            console.log(chalk[statusColor](`  ${index + 1}. ${requestType} ${url} - ${response.status} (${response.duration}ms)`));
+          } else if (failed) {
+            console.log(chalk.red(`  ${index + 1}. ${requestType} ${url} - FAILED: ${failure}`));
           } else {
-            console.log(chalk.red(`  ${index + 1}. ${method} ${url} - FAILED`));
+            console.log(chalk.yellow(`  ${index + 1}. ${requestType} ${url} - PENDING`));
           }
         });
       }
