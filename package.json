@@ -12,6 +12,7 @@
     "test": "node test/test.js",
     "demo": "node examples/demo.js",
     "demo:auth": "node examples/auth-demo.js",
+    "demo:network": "node examples/network-demo.js",
     "lint": "eslint src/",
     "format": "prettier --write src/ test/"
   },

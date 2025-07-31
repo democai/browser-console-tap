@@ -17,6 +17,8 @@ program
   .option('--no-headless', 'Run browser in non-headless mode (for debugging)')
   .option('--user-agent <agent>', 'Custom user agent string')
   .option('--headers <headers>', 'Custom HTTP headers in JSON format (e.g., \'{"Authorization": "Bearer token", "X-Custom": "value"}\')')
+  .option('--network', 'Track and display network requests and responses')
+  .option('--network-verbose', 'Track network requests with detailed headers (implies --network)')
   .parse();
 
 const options = program.opts();
@@ -65,6 +67,30 @@ if (options.headers) {
   }
 }
 
+// Helper function to truncate long values
+function truncateValue(value, maxLength = 512) {
+  if (typeof value !== 'string') {
+    value = String(value);
+  }
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.substring(0, maxLength)}...`;
+}
+
+// Helper function to format headers for display
+function formatHeaders(headers, maxLength = 512) {
+  if (!headers || Object.keys(headers).length === 0) {
+    return '{}';
+  }
+  
+  const formatted = {};
+  for (const [key, value] of Object.entries(headers)) {
+    formatted[key] = truncateValue(value, maxLength);
+  }
+  return JSON.stringify(formatted, null, 2);
+}
+
 async function main() {
   let browser;
   
@@ -74,6 +100,9 @@ async function main() {
     console.log(chalk.gray(`Delay: ${delayMs}ms`));
     console.log(chalk.gray(`Timeout: ${timeoutMs}ms`));
     console.log(chalk.gray(`Headless: ${options.headless ? 'Yes' : 'No'}`));
+    if (options.network || options.networkVerbose) {
+      console.log(chalk.gray(`Network tracking: ${options.networkVerbose ? 'Verbose' : 'Basic'}`));
+    }
     if (Object.keys(customHeaders).length > 0) {
       console.log(chalk.gray(`Headers: ${JSON.stringify(customHeaders)}`));
     }
@@ -97,6 +126,77 @@ async function main() {
       await page.setExtraHTTPHeaders({
         ...customHeaders,
         'User-Agent': options.userAgent
+      });
+    }
+
+    // Network tracking
+    const networkRequests = [];
+    
+    if (options.network || options.networkVerbose) {
+      page.on('request', async (request) => {
+        const url = request.url();
+        const method = request.method();
+        const headers = request.headers();
+        const postData = request.postData();
+        
+        const networkRequest = {
+          url,
+          method,
+          headers,
+          postData,
+          timestamp: new Date().toISOString(),
+          startTime: Date.now()
+        };
+        
+        networkRequests.push(networkRequest);
+        
+        if (options.networkVerbose) {
+          console.log(chalk.cyan(`🌐 [REQUEST] ${method} ${url}`));
+          console.log(chalk.gray(`   Headers: ${formatHeaders(headers)}`));
+          if (postData) {
+            console.log(chalk.gray(`   Post Data: ${truncateValue(postData)}`));
+          }
+        }
+      });
+
+      page.on('response', async (response) => {
+        const url = response.url();
+        const status = response.status();
+        const headers = response.headers();
+        const request = response.request();
+        
+        // Find the corresponding request
+        const networkRequest = networkRequests.find(req => req.url === url && req.method === request.method());
+        
+        if (networkRequest) {
+          const endTime = Date.now();
+          const duration = endTime - networkRequest.startTime;
+          
+          networkRequest.response = {
+            status,
+            headers,
+            duration
+          };
+          
+          // Determine status color
+          let statusColor = 'green';
+          if (status >= 400) statusColor = 'red';
+          else if (status >= 300) statusColor = 'yellow';
+          
+          if (options.networkVerbose) {
+            console.log(chalk[statusColor](`📡 [RESPONSE] ${status} ${url} (${duration}ms)`));
+            console.log(chalk.gray(`   Response Headers: ${formatHeaders(headers)}`));
+          } else {
+            console.log(chalk[statusColor](`📡 [${status}] ${url} (${duration}ms)`));
+          }
+        }
+      });
+
+      page.on('requestfailed', (request) => {
+        const url = request.url();
+        const failure = request.failure();
+        
+        console.log(chalk.red(`❌ [FAILED] ${request.method()} ${url} - ${failure.errorText}`));
       });
     }
 
@@ -169,7 +269,7 @@ async function main() {
 
     // Capture request failures
     page.on('requestfailed', (request) => {
-      if (options.verbose) {
+      if (options.verbose && !options.network && !options.networkVerbose) {
         console.error(chalk.red(`[requestfailed] ${request.url()} - ${request.failure().errorText}`));
       }
     });
@@ -190,6 +290,26 @@ async function main() {
 
     console.log(chalk.green(`✅ Capture complete!`));
     console.log(chalk.gray(`📊 Captured ${consoleMessages.length} console messages`));
+    
+    if (options.network || options.networkVerbose) {
+      const successfulRequests = networkRequests.filter(req => req.response);
+      const failedRequests = networkRequests.filter(req => !req.response);
+      
+      console.log(chalk.gray(`🌐 Network: ${successfulRequests.length} successful, ${failedRequests.length} failed requests`));
+      
+      if (options.networkVerbose) {
+        console.log(chalk.blue(`\n📋 Network Summary:`));
+        networkRequests.forEach((req, index) => {
+          const { url, method, response } = req;
+          if (response) {
+            const statusColor = response.status >= 400 ? 'red' : response.status >= 300 ? 'yellow' : 'green';
+            console.log(chalk[statusColor](`  ${index + 1}. ${method} ${url} - ${response.status} (${response.duration}ms)`));
+          } else {
+            console.log(chalk.red(`  ${index + 1}. ${method} ${url} - FAILED`));
+          }
+        });
+      }
+    }
 
   } catch (error) {
     console.error(chalk.red(`❌ Error: ${error.message}`));

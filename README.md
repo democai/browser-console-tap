@@ -8,6 +8,7 @@ A powerful CLI tool to capture browser console logs from any URL using headless 
 - 🎨 **Beautiful Output**: Colored console output with emojis and formatting
 - ⚡ **Flexible Timing**: Customizable delay after page load
 - 🔧 **Advanced Options**: Custom user agents, headers, timeouts, and verbose logging
+- 🌐 **Network Monitoring**: Track requests, responses, headers, and timing with `--network` and `--network-verbose`
 - 🧪 **Tested**: Comprehensive test suite included
 - 📦 **Easy Installation**: Simple npm package
 
@@ -24,6 +25,9 @@ This tool is particularly valuable in AI Agent pipelines where automated testing
 - **CI/CD Integration**: Integrate into deployment pipelines to verify successful deployments
 - **Debug Remote Issues**: Troubleshoot problems on sites that are difficult to access or reproduce locally
 - **Authenticated Testing**: Test protected endpoints and APIs with authentication headers
+- **Network Analysis**: Monitor API calls, resource loading, and network performance
+- **Security Auditing**: Track request/response headers to identify security issues
+- **Performance Monitoring**: Measure load times and identify slow resources
 
 The script's headless browser automation makes it perfect for server environments where GUI browsers aren't available, and its structured output format allows AI agents to parse and analyze results programmatically.
 
@@ -141,6 +145,8 @@ browser-console-tap --delay 4000 --verbose --timeout 30000 https://example.com
 | `--no-headless` | | Run browser in non-headless mode | `true` |
 | `--user-agent <agent>` | | Custom user agent string | Browser default |
 | `--headers <headers>` | | Custom HTTP headers in JSON format | None |
+| `--network` | | Track and display network requests and responses | `false` |
+| `--network-verbose` | | Track network requests with detailed headers (implies --network) | `false` |
 
 ## Examples
 
@@ -173,6 +179,15 @@ browser-console-tap --headers '{"X-API-Key": "your-api-key", "Accept": "applicat
 
 # Multiple authentication headers
 browser-console-tap --headers '{"Authorization": "Bearer token", "X-Client-ID": "client123", "X-Request-ID": "req456"}' https://secure-api.example.com
+
+# Track network requests
+browser-console-tap --network https://example.com
+
+# Track network requests with detailed headers
+browser-console-tap --network-verbose https://example.com
+
+# Combine network tracking with other options
+browser-console-tap --network --delay 5000 --verbose https://example.com
 ```
 
 ## Output Format
@@ -183,7 +198,7 @@ The tool captures and formats console output with color coding:
 - 🟡 **Yellow**: `console.warn()` messages  
 - 🔴 **Red**: `console.error()` messages and page errors
 
-Example output:
+### Console Output Example:
 ```
 🚀 Starting browser-console-tap
 URL: https://example.com
@@ -202,6 +217,60 @@ Headless: Yes
 📊 Captured 4 console messages
 🔚 Browser closed
 ```
+
+### Network Output Format
+
+When using `--network` or `--network-verbose`, the tool also tracks network requests:
+
+#### Basic Network Tracking (`--network`):
+```
+🌐 Network tracking: Basic
+📄 Navigating to https://example.com...
+✅ Page loaded successfully
+📡 [200] https://example.com/ (245ms)
+📡 [200] https://example.com/style.css (89ms)
+📡 [200] https://example.com/script.js (156ms)
+📡 [404] https://example.com/missing.js (12ms)
+✅ Capture complete!
+📊 Captured 2 console messages
+🌐 Network: 3 successful, 1 failed requests
+🔚 Browser closed
+```
+
+#### Verbose Network Tracking (`--network-verbose`):
+```
+🌐 Network tracking: Verbose
+📄 Navigating to https://example.com...
+✅ Page loaded successfully
+🌐 [REQUEST] GET https://example.com/
+   Headers: {
+     "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+     "accept-language": "en-US,en;q=0.5",
+     "user-agent": "Mozilla/5.0..."
+   }
+📡 [RESPONSE] 200 https://example.com/ (245ms)
+   Response Headers: {
+     "content-type": "text/html; charset=utf-8",
+     "content-length": "12345",
+     "server": "nginx/1.18.0"
+   }
+🌐 [REQUEST] GET https://example.com/style.css
+📡 [RESPONSE] 200 https://example.com/style.css (89ms)
+✅ Capture complete!
+📊 Captured 2 console messages
+🌐 Network: 2 successful, 0 failed requests
+
+📋 Network Summary:
+  1. GET https://example.com/ - 200 (245ms)
+  2. GET https://example.com/style.css - 200 (89ms)
+🔚 Browser closed
+```
+
+**Network Status Color Coding:**
+- 🟢 **Green**: 2xx responses (success)
+- 🟡 **Yellow**: 3xx responses (redirects)
+- 🔴 **Red**: 4xx/5xx responses (client/server errors)
+- 🔴 **Red**: Failed requests (network errors, timeouts, etc.)
 
 ## Testing
 
@@ -238,6 +307,7 @@ npm start          # Run the application
 npm test           # Run tests
 npm run demo       # Run basic demo
 npm run demo:auth  # Run authentication headers demo
+npm run demo:network # Run network monitoring demo
 npm run lint       # Lint code
 npm run format     # Format code
 ```
